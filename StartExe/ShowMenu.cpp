@@ -163,8 +163,9 @@ LRESULT ShowMenu::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 			break;
 
 		case RCLICK_HELP:
+			ShellExecute(NULL, "open", "C:\\Users\\Tsukasa\\Desktop\\DB_source\\DevelopeDBTool\\Release\\HelpView.exe", NULL, NULL, SW_SHOWNORMAL);
 			//ヘルプ表示用のexe作って表示させる？
-			MessageBox(NULL, TEXT("処理がまだ未定義です。"), TEXT("システムエラー"), MB_OK);
+			//MessageBox(NULL, TEXT("処理がまだ未定義です。"), TEXT("システムエラー"), MB_OK);
 			break;
 		}
 		break;
