@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="Shift_JIS"?>
+
+<MENUS>
+	<INDIVIDUAL name="DBへ登録" pass="C:\Windows\System32\cmd.exe"/>
+	<INDIVIDUAL name="DB一覧を表示" pass="C:\Windows\System32\cmd.exe"/>
+	<INDIVIDUAL name="コマンドプロンプト" pass="C:\Windows\System32\cmd.exe"/>
+	<INDIVIDUAL name="メモ帳" pass="C:\Windows\System32\notepad.exe"/>
+	<INDIVIDUAL name="FireFox" pass="C:\Program Files\Mozilla Firefox\firefox.exe"/>
+	<INDIVIDUAL name="サクラエディタ" pass="C:\Program Files (x86)\sakura\sakura.exe"/>
+</MENUS>
