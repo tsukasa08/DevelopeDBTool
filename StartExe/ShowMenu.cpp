@@ -1,6 +1,8 @@
 #include "ShowMenu.h"
+
 #include <shellapi.h >
 #include <string>
+#include <map>
 
 #define WINDOWHEIGHT 500
 #define WINDOWWIDTH 500
@@ -8,7 +10,9 @@
 #define RCLICK_EXIT 105
 #define RCLICK_HELP 106
 
+//staticメンバ変数の定義
 ShowMenu::MainArgument ShowMenu::stSMArgument;
+XMLParser* ShowMenu::XmlObj;
 
 ShowMenu::ShowMenu()
 {
@@ -17,6 +21,7 @@ ShowMenu::ShowMenu()
 
 ShowMenu::~ShowMenu()
 {
+	delete XmlObj;
 }
 
 ShowMenu::ShowMenu(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR lpCmdLine, int nCmdShow)
@@ -94,6 +99,10 @@ LRESULT ShowMenu::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 	static HIMAGELIST hImg;
 	//ツリーメニュー詳細
 	static TVINSERTSTRUCT tvis;
+	//XMLファイルから取得したツリーメニュー別の名前を格納する
+	static std::vector<CComBSTR> vecName;
+	//XMLファイルから取得したツリーメニュー別の実行ファイルのパスを格納する
+	static std::vector<CComBSTR> vecPass;
 
 
 	switch (msg) {
@@ -124,9 +133,14 @@ LRESULT ShowMenu::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
 		hImg = RegisterTreeImages(TreeHwnd);
 
-		tvis = SetTreeControlInfo(TreeHwnd);
+		tvis = SetTreeControlInfo(TreeHwnd, &vecPass, &vecName);
 
-		//ステータスバー作成(時刻表示する?)
+		if (tvis.hParent == NULL && tvis.hInsertAfter == NULL &&
+			tvis.item.mask == NULL && tvis.item.hItem == NULL && tvis.itemex.mask == NULL && tvis.itemex.hItem == NULL) {
+			::PostQuitMessage(0);
+			break;
+		}
+
 		hStatus = ::CreateStatusWindow(
 			WS_CHILD | WS_VISIBLE | CCS_BOTTOM | SBARS_SIZEGRIP,
 			TEXT("右クリックでヘルプを表示できます。"),
@@ -164,8 +178,6 @@ LRESULT ShowMenu::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
 		case RCLICK_HELP:
 			ShellExecute(NULL, "open", "C:\\Users\\Tsukasa\\Desktop\\DB_source\\DevelopeDBTool\\Release\\HelpView.exe", NULL, NULL, SW_SHOWNORMAL);
-			//ヘルプ表示用のexe作って表示させる？
-			//MessageBox(NULL, TEXT("処理がまだ未定義です。"), TEXT("システムエラー"), MB_OK);
 			break;
 		}
 		break;
@@ -175,9 +187,17 @@ LRESULT ShowMenu::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 		NMHDR* pnmhdr = reinterpret_cast<LPNMHDR>(lParam);
 		LV_KEYDOWN* pLVKey = reinterpret_cast<LV_KEYDOWN*>(pnmhdr);
 
+		//読み込んだXMLファイルの実行パスをstd::mapに設定
+		std::map<CComBSTR, CComBSTR> XMLFileContents;
+		int i = 0;
+		for (auto itr = vecName.begin(); itr != vecName.end(); itr++) {
+			XMLFileContents[(*itr)] = vecPass[i];
+			i++;
+		}
+
 		//選択状態でEnterキー押下の場合
 		if (pLVKey->wVKey == VK_RETURN){
-			DoEachModule(TreeHwnd);
+			DoEachModule(TreeHwnd, XMLFileContents);
 		}
 
 		//選択状態でダブルクリックされた場合
@@ -186,7 +206,7 @@ LRESULT ShowMenu::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 			switch (pnmhdr->code){
 			case NM_DBLCLK:
 				//選択結果によってそれぞれのモジュール起動
-				DoEachModule(TreeHwnd);
+				DoEachModule(TreeHwnd, XMLFileContents);
 			}
 		}
 	}
@@ -242,14 +262,16 @@ HIMAGELIST ShowMenu::RegisterTreeImages(HWND TreeHwnd){
 }
 
 //ツリーコントロールの情報を設定
-TVINSERTSTRUCT ShowMenu::SetTreeControlInfo(HWND TreeHwnd){
+TVINSERTSTRUCT ShowMenu::SetTreeControlInfo(HWND TreeHwnd, std::vector<CComBSTR>* vecPass, std::vector<CComBSTR>* vecName){
 
-	TVINSERTSTRUCT tvis;
+	TVINSERTSTRUCT tvis = {NULL};
 	HTREEITEM hitem;
-	int iCount = 0;
 
-	//暫定ツリー子メニュー(xml読み込んでツリーメニューの個数と内容を設定するようにする)
-	LPTSTR strItem[] = { TEXT("DBへ登録"), TEXT("DB登録内容表示"), TEXT("メモ帳"), TEXT("コマンドプロンプト"), TEXT("FireFox") };
+	//XML読み込み関数
+	XmlObj = new XMLParser();
+	if (XmlObj->ReadXml(vecName, vecPass) == false) {
+		return tvis;
+	}
 
 	tvis.hParent = TVI_ROOT;
 	tvis.hInsertAfter = TVI_LAST;
@@ -258,8 +280,15 @@ TVINSERTSTRUCT ShowMenu::SetTreeControlInfo(HWND TreeHwnd){
 	hitem = TreeView_InsertItem(TreeHwnd, &tvis);
 
 	tvis.hParent = hitem;
-	for (; iCount < 5; iCount++) {
-		tvis.item.pszText = strItem[iCount];
+
+	LPSTR lpWkBuf;
+	_bstr_t bstBuf;
+	for (auto itr = vecName->begin(); itr != vecName->end(); itr++) {
+		//BSTR->LPCSTR変換
+		bstBuf = *itr;
+		lpWkBuf = static_cast<char*>(bstBuf);
+		tvis.item.pszText = lpWkBuf;
+
 		tvis.item.mask = TVIF_TEXT | TVIF_IMAGE | TVIF_SELECTEDIMAGE;
 		tvis.item.iImage = 1;
 		tvis.item.iSelectedImage = 1;
@@ -271,7 +300,7 @@ TVINSERTSTRUCT ShowMenu::SetTreeControlInfo(HWND TreeHwnd){
 }
 
 //ツリーコントロールの選択結果によってそれぞれのモジュール起動
-void ShowMenu::DoEachModule(HWND TreeHwnd){
+void ShowMenu::DoEachModule(HWND TreeHwnd, std::map<CComBSTR, CComBSTR> XMLFileContents){
 
 	HTREEITEM hItem;
 	TVITEM ti;
@@ -287,15 +316,34 @@ void ShowMenu::DoEachModule(HWND TreeHwnd){
 	TreeView_GetItem(TreeHwnd, &ti);
 
 	std::string tmp(szStr);
-	if (tmp == "メモ帳"){
-		ShellExecute(NULL, "open", "notepad", NULL, NULL, SW_SHOWNORMAL);
-	}
-	else if (tmp == "コマンドプロンプト"){
-		ShellExecute(NULL, "open", "C:\\Windows\\System32\\cmd.exe", NULL, NULL, SW_SHOWNORMAL);
-	}
-	else if (tmp == "FireFox"){
-		ShellExecute(NULL, "open", "C:\\Program Files\\Mozilla Firefox\\firefox.exe", NULL, NULL, SW_SHOWNORMAL);
-	}
+
+	//std::stringをBSTRに変換(BSTRはワイド文字)
+	int strlen = ::MultiByteToWideChar(
+		CP_ACP,
+		NULL,
+		tmp.c_str(),
+		tmp.length(),
+		NULL,
+		NULL);
+
+	//BSTRのバッファを準備
+	BSTR CComtmp = ::SysAllocStringLen(NULL, strlen);
+
+	::MultiByteToWideChar(
+		CP_ACP,
+		NULL,
+		tmp.c_str(),
+		tmp.length(),
+		CComtmp,
+		strlen);
+
+	//選択されたパス名の取得
+	BSTR tmpPassName = XMLFileContents[CComtmp];
+	_bstr_t bstmpPassName = tmpPassName;
+	std::string PassName(static_cast<char*>(bstmpPassName));
+
+	//取得したパス名を使用してモジュール起動
+	::ShellExecute(NULL, "open", PassName.c_str(), NULL, NULL, SW_SHOWNORMAL);
 
 }
 
